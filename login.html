@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentify Fleet — Login</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080c14;color:#e8f0fe;font-family:'Courier New',monospace;
+     min-height:100vh;display:flex;align-items:center;justify-content:center}
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none}
+.box{background:#0d1420;border:1px solid #1e2d45;border-radius:16px;
+      padding:40px;width:100%;max-width:400px;position:relative}
+.logo{text-align:center;margin-bottom:32px}
+.logo h1{font-size:24px;font-weight:900;letter-spacing:3px;color:#00d4ff}
+.logo h1 span{color:#fff}
+.logo p{font-size:10px;color:#3a5070;letter-spacing:2px;margin-top:4px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:10px;letter-spacing:2px;color:#5c7a9e;
+              text-transform:uppercase;margin-bottom:6px}
+.field input{width:100%;background:#111b2e;border:1px solid #1e2d45;
+              border-radius:8px;padding:12px 16px;color:#e8f0fe;font-size:14px;
+              font-family:monospace;outline:none;transition:border-color 0.2s}
+.field input:focus{border-color:#00d4ff}
+.btn-login{width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0055ff);
+            color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:800;
+            letter-spacing:2px;cursor:pointer;font-family:monospace;margin-top:8px;
+            transition:opacity 0.2s}
+.btn-login:hover{opacity:0.9}
+.btn-login:active{transform:scale(0.98)}
+.err{color:#ff3d6b;font-size:11px;text-align:center;margin-top:12px;
+      min-height:16px;font-family:monospace}
+.loading{display:none;text-align:center;color:#00d4ff;font-size:12px;margin-top:12px}
+.driver-link{text-align:center;margin-top:24px;padding-top:20px;
+              border-top:1px solid #1e2d45}
+.driver-link p{font-size:10px;color:#3a5070;margin-bottom:8px}
+.driver-link a{color:#00d4ff;text-decoration:none;font-size:12px;font-weight:700}
+.version{text-align:center;font-size:9px;color:#1e2d45;margin-top:20px;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">
+    <h1>MOMENTIFY <span>FLEET</span></h1>
+    <p>FLEET MANAGEMENT SYSTEM</p>
+  </div>
+
+  <div class="field">
+    <label>Username</label>
+    <input type="text" id="username" placeholder="Masukkan username" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Masukkan password" onkeydown="if(event.key==='Enter')login()">
+  </div>
+
+  <button class="btn-login" onclick="login()">🔐 MASUK DASHBOARD</button>
+  <div class="err" id="err"></div>
+  <div class="loading" id="loading">⏳ Memverifikasi...</div>
+
+  <div class="driver-link">
+    <p>Anda driver? Buka aplikasi di bawah:</p>
+    <a href="/hp">📱 Buka Aplikasi Driver GPS</a>
+  </div>
+  <div class="version">MOMENTIFY FLEET v3.0 — PRODUCTION</div>
+</div>
+
+<script>
+// Cek kalau sudah login
+var token = localStorage.getItem('mf_token');
+if (token) {
+  fetch('/api/drivers', { headers: { 'x-auth-token': token } })
+    .then(r => { if (r.ok) window.location.href = '/dashboard'; })
+    .catch(() => {});
+}
+
+function login() {
+  var u = document.getElementById('username').value.trim();
+  var p = document.getElementById('password').value.trim();
+  var err = document.getElementById('err');
+  var loading = document.getElementById('loading');
+
+  if (!u || !p) { err.textContent = 'Username dan password wajib diisi'; return; }
+
+  err.textContent = '';
+  loading.style.display = 'block';
+
+  fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: u, password: p })
+  })
+  .then(r => r.json())
+  .then(data => {
+    loading.style.display = 'none';
+    if (data.error) { err.textContent = data.error; return; }
+    localStorage.setItem('mf_token', data.token);
+    localStorage.setItem('mf_name', data.name);
+    localStorage.setItem('mf_role', data.role);
+    window.location.href = '/dashboard';
+  })
+  .catch(e => {
+    loading.style.display = 'none';
+    err.textContent = 'Gagal konek server. Coba lagi.';
+  });
+}
+</script>
+</body>
+</html>
