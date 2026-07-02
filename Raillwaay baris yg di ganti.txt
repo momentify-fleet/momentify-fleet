@@ -1,0 +1,1 @@
+var SERVER = 'https://momentify-fleet-production.up.railway.app';
