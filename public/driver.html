@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Momentify Driver GPS</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    background: #080c14; color: #e8f0fe;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; padding: 20px 16px;
+  }
+  .header { width:100%; text-align:center; margin-bottom:20px; }
+  .logo { font-size:22px; font-weight:900; letter-spacing:2px; color:#00d4ff; margin-bottom:4px; }
+  .logo span { color:#fff; }
+  .subtitle { font-size:11px; color:#3a5070; letter-spacing:1px; }
+
+  .status-badge {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px 24px; border-radius:30px; font-size:13px; font-weight:700;
+    letter-spacing:1px; margin-bottom:16px; transition:all 0.3s;
+  }
+  .disconnected { background:rgba(255,61,107,0.12); border:1px solid rgba(255,61,107,0.3); color:#ff3d6b; }
+  .connecting   { background:rgba(255,204,0,0.12);  border:1px solid rgba(255,204,0,0.3);  color:#ffcc00; }
+  .connected    { background:rgba(0,230,118,0.12);  border:1px solid rgba(0,230,118,0.3);  color:#00e676; }
+  .sending      { background:rgba(0,212,255,0.12);  border:1px solid rgba(0,212,255,0.3);  color:#00d4ff; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .sending .status-dot { animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.6)} }
+
+  .speed-display {
+    width:100%; max-width:360px; background:#0d1420;
+    border:1px solid #1e2d45; border-radius:16px; padding:20px;
+    text-align:center; margin-bottom:14px;
+  }
+  .speed-number { font-size:72px; font-weight:900; color:#00d4ff; line-height:1; transition:color 0.3s; }
+  .speed-number.warn   { color:#ffcc00; }
+  .speed-number.danger { color:#ff3d6b; }
+  .speed-unit { font-size:13px; color:#5c7a9e; margin-top:4px; }
+  .speed-bar-wrap { height:4px; background:#1e2d45; border-radius:2px; margin-top:12px; overflow:hidden; }
+  .speed-bar { height:100%; border-radius:2px; background:linear-gradient(90deg,#00d4ff,#00e676); transition:width 0.5s ease; width:0%; }
+
+  .gps-card {
+    width:100%; max-width:360px; background:#0d1420;
+    border:1px solid #1e2d45; border-radius:16px;
+    padding:18px; margin-bottom:12px;
+  }
+  .card-title { font-size:10px; letter-spacing:2px; color:#3a5070; text-transform:uppercase; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #111b2e; }
+  .data-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(30,45,69,0.4); }
+  .data-row:last-child { border-bottom:none; }
+  .data-label { font-size:11px; color:#5c7a9e; }
+  .data-val { font-size:13px; font-weight:700; color:#00d4ff; text-align:right; }
+  .data-val.dim { color:#3a5070; }
+
+  .name-label { font-size:10px; color:#3a5070; letter-spacing:1.5px; margin-bottom:6px; display:block; width:100%; max-width:360px; }
+  .name-input {
+    width:100%; max-width:360px; background:#0d1420; border:1px solid #1e2d45;
+    border-radius:10px; padding:12px 16px; color:#e8f0fe; font-size:14px;
+    font-family:monospace; margin-bottom:12px; outline:none;
+  }
+  .name-input:focus { border-color:#00d4ff; }
+
+  .btn { width:100%; max-width:360px; padding:16px; border-radius:12px; border:none; font-size:14px; font-weight:800; letter-spacing:2px; cursor:pointer; transition:all 0.2s; margin-bottom:10px; font-family:monospace; }
+  .btn-start { background:linear-gradient(135deg,#00d4ff,#0055ff); color:#fff; }
+  .btn-start:active { transform:scale(0.97); opacity:0.9; }
+  .btn-stop { background:rgba(255,61,107,0.12); border:1px solid rgba(255,61,107,0.3); color:#ff3d6b; display:none; }
+
+  .sent-counter { font-size:11px; color:#3a5070; text-align:center; margin-bottom:14px; }
+  .sent-counter span { color:#00d4ff; font-weight:700; }
+
+  .log-box { width:100%; max-width:360px; background:#0d1420; border:1px solid #1e2d45; border-radius:12px; padding:12px; max-height:120px; overflow-y:auto; font-size:10px; color:#3a5070; line-height:1.9; }
+  .log-ok   { color:#00e676; }
+  .log-warn { color:#ffcc00; }
+  .log-err  { color:#ff3d6b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">MOMENTIFY <span>FLEET</span></div>
+  <div class="subtitle">DRIVER GPS TRACKER</div>
+</div>
+
+<div class="status-badge disconnected" id="statusBadge">
+  <div class="status-dot"></div>
+  <span id="statusText">BELUM TERHUBUNG</span>
+</div>
+
+<label class="name-label">NAMA DRIVER</label>
+<input class="name-input" id="driverName" placeholder="Masukkan nama kamu..." value="Demo Driver">
+
+<div class="speed-display">
+  <div class="speed-number" id="speedNum">0</div>
+  <div class="speed-unit">km/h</div>
+  <div class="speed-bar-wrap"><div class="speed-bar" id="speedBar"></div></div>
+</div>
+
+<div class="gps-card">
+  <div class="card-title">📡 DATA GPS REALTIME</div>
+  <div class="data-row"><span class="data-label">Latitude</span><span class="data-val" id="dLat">—</span></div>
+  <div class="data-row"><span class="data-label">Longitude</span><span class="data-val" id="dLng">—</span></div>
+  <div class="data-row"><span class="data-label">Akurasi GPS</span><span class="data-val" id="dAcc">—</span></div>
+  <div class="data-row"><span class="data-label">Heading</span><span class="data-val" id="dHead">—</span></div>
+  <div class="data-row"><span class="data-label">Altitude</span><span class="data-val" id="dAlt">—</span></div>
+  <div class="data-row"><span class="data-label">Waktu</span><span class="data-val dim" id="dTime">—</span></div>
+</div>
+
+<div class="sent-counter">Total dikirim: <span id="sentCount">0</span> titik GPS</div>
+
+<button class="btn btn-start" id="btnStart" onclick="startTracking()">▶ MULAI TRACKING GPS</button>
+<button class="btn btn-stop"  id="btnStop"  onclick="stopTracking()">■ STOP TRACKING</button>
+
+<div class="log-box" id="logBox"><span style="color:#1e2d45">— log muncul di sini —</span></div>
+
+<script>
+  const socket = io();
+  let watchId = null, sentCount = 0;
+  const driverId = 'D-' + Math.random().toString(36).slice(2,5).toUpperCase();
+
+  socket.on('connect', () => { setStatus('connected','🟢 TERHUBUNG KE SERVER'); addLog('ok','Terhubung · ID: '+socket.id.slice(0,8)); });
+  socket.on('disconnect', () => { setStatus('disconnected','🔴 TERPUTUS'); addLog('err','Koneksi terputus!'); });
+  socket.on('connect_error', () => { setStatus('disconnected','🔴 GAGAL KONEK'); addLog('err','Server tidak bisa dijangkau'); });
+
+  function startTracking() {
+    if (!navigator.geolocation) { addLog('err','Browser tidak support GPS!'); return; }
+    document.getElementById('btnStart').style.display='none';
+    document.getElementById('btnStop').style.display='block';
+    setStatus('sending','📡 MENGIRIM GPS...');
+    addLog('ok','Meminta izin akses GPS...');
+    watchId = navigator.geolocation.watchPosition(onGPS, onGPSErr, {
+      enableHighAccuracy: true, timeout: 15000, maximumAge: 0
+    });
+  }
+
+  function stopTracking() {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+    document.getElementById('btnStart').style.display='block';
+    document.getElementById('btnStop').style.display='none';
+    setStatus('connected','🟢 TRACKING DIHENTIKAN');
+    addLog('warn','Tracking dihentikan');
+  }
+
+  function onGPS(pos) {
+    const c = pos.coords;
+    const spd = c.speed ? (c.speed * 3.6).toFixed(1) : 0;
+    const now = new Date().toLocaleTimeString('id-ID');
+
+    document.getElementById('dLat').textContent  = c.latitude.toFixed(7);
+    document.getElementById('dLng').textContent  = c.longitude.toFixed(7);
+    document.getElementById('dAcc').textContent  = '±'+c.accuracy.toFixed(0)+' m';
+    document.getElementById('dHead').textContent = c.heading ? c.heading.toFixed(0)+'°' : '—';
+    document.getElementById('dAlt').textContent  = c.altitude ? c.altitude.toFixed(0)+' m' : '—';
+    document.getElementById('dTime').textContent = now;
+
+    const s = parseFloat(spd);
+    const el = document.getElementById('speedNum');
+    el.textContent = Math.round(s);
+    el.className = 'speed-number'+(s>80?' danger':s>50?' warn':'');
+    document.getElementById('speedBar').style.width = Math.min(s/100*100,100)+'%';
+    document.getElementById('speedBar').style.background = s>80
+      ? 'linear-gradient(90deg,#ff3d6b,#ff6b35)'
+      : s>50 ? 'linear-gradient(90deg,#ffcc00,#ff6b35)'
+      : 'linear-gradient(90deg,#00d4ff,#00e676)';
+
+    socket.emit('driver-location', {
+      driverId, driverName: document.getElementById('driverName').value||'Driver',
+      lat: c.latitude, lng: c.longitude, speed: spd,
+      accuracy: c.accuracy.toFixed(0), heading: c.heading||0, altitude: c.altitude||0
+    });
+
+    sentCount++;
+    document.getElementById('sentCount').textContent = sentCount;
+    if (sentCount % 5 === 0 || sentCount === 1)
+      addLog('ok','['+now+'] '+c.latitude.toFixed(5)+','+c.longitude.toFixed(5)+' · '+spd+' km/h');
+  }
+
+  function onGPSErr(e) {
+    const m={1:'Izin GPS ditolak! Aktifkan di setting browser.',2:'Posisi tidak tersedia.',3:'GPS timeout.'};
+    addLog('err', m[e.code]||e.message);
+  }
+
+  function setStatus(type, text) {
+    document.getElementById('statusBadge').className='status-badge '+type;
+    document.getElementById('statusText').textContent=text;
+  }
+  function addLog(type, msg) {
+    const b=document.getElementById('logBox');
+    const d=document.createElement('div');
+    d.className='log-'+type; d.textContent='> '+msg;
+    b.appendChild(d); b.scrollTop=b.scrollHeight;
+  }
+
+  addLog('ok','Driver app siap · Tekan MULAI TRACKING');
+  addLog('warn','Pastikan GPS HP aktif!');
+</script>
+</body>
+</html>

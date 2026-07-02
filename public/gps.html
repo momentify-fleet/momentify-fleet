@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPS</title>
+<!-- socket.io dari CDN, bukan server lokal -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body style="background:#000;color:#0f0;font-family:monospace;padding:20px;margin:0;font-size:15px">
+
+<h2 style="color:#0ff;margin:0 0 12px">MOMENTIFY GPS v4</h2>
+
+Status: <b id="st" style="color:#ff0">SIAP</b><br>
+Server: <b id="sv" style="color:#f00">BELUM KONEK</b><br>
+Kirim: <b id="ct">0</b> titik<br><br>
+
+Nama:<br>
+<input id="nm" value="Demo Driver"
+style="background:#111;color:#0f0;border:1px solid #0f0;padding:8px;width:90%;font-size:15px;font-family:monospace;margin-bottom:12px"><br>
+
+Speed: <b id="sp" style="font-size:40px;color:#0ff">0</b> km/h<br>
+Lat: <b id="la">-</b><br>
+Lng: <b id="ln">-</b><br>
+Akurasi: <b id="ac">-</b><br>
+Waktu: <b id="wk">-</b><br><br>
+
+<button id="b1" onclick="izin()"
+style="background:#ff0;color:#000;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:block">
+TAP INI DULU — IZIN GPS
+</button>
+
+<button id="b2" onclick="mulai()"
+style="background:#0f0;color:#000;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:none">
+MULAI KIRIM GPS
+</button>
+
+<button id="b3" onclick="stop()"
+style="background:#f00;color:#fff;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:none">
+STOP
+</button>
+
+<div id="log" style="font-size:11px;color:#555;margin-top:8px;max-height:120px;overflow-y:auto;border-top:1px solid #222;padding-top:8px">
+<div style="color:#555">> app siap</div>
+</div>
+
+<script>
+// IP SERVER LAPTOP — ganti kalau beda
+var SERVER = 'http://192.168.100.88:3000';
+
+var sk=null, wid=null, n=0;
+var did='D'+Math.floor(Math.random()*900+100);
+
+function lg(c,t){
+  var b=document.getElementById('log');
+  var e=document.createElement('div');
+  e.style.color=c; e.textContent='>'+t;
+  b.appendChild(e); b.scrollTop=b.scrollHeight;
+}
+
+function izin(){
+  lg('#ff0','Minta izin GPS...');
+  document.getElementById('b1').textContent='MENUNGGU IZIN...';
+  document.getElementById('b1').style.background='#888';
+
+  if(!navigator.geolocation){
+    lg('#f00','GPS tidak ada! Pakai Chrome/Opera terbaru');
+    document.getElementById('b1').textContent='GPS TIDAK ADA';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(p){
+      lg('#0f0','IZIN OK! Lat:'+p.coords.latitude.toFixed(5));
+      lg('#0f0','Akurasi:+-'+p.coords.accuracy.toFixed(0)+'m');
+      document.getElementById('st').textContent='GPS SIAP';
+      document.getElementById('b1').style.display='none';
+      konek();
+    },
+    function(e){
+      var msg = e.code===1 ? 'DITOLAK! Settings HP > Chrome > Izin > Lokasi > ON'
+              : e.code===2 ? 'GPS lemah, coba di luar ruangan'
+              : 'Timeout, tap lagi';
+      lg('#f00', msg);
+      document.getElementById('b1').textContent='TAP LAGI — IZIN GPS';
+      document.getElementById('b1').style.background='#ff0';
+      document.getElementById('st').textContent='GAGAL';
+    },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+  );
+}
+
+function konek(){
+  lg('#ff0','Konek server '+SERVER);
+  // Konek langsung ke IP server dengan port
+  sk = io(SERVER, {
+    transports:['websocket','polling'],
+    reconnection:true,
+    reconnectionDelay:2000,
+    reconnectionAttempts:10,
+    pingTimeout:60000,
+    pingInterval:10000
+  });
+  sk.on('connect',function(){
+    lg('#0f0','SERVER OK: '+sk.id.slice(0,6));
+    document.getElementById('sv').textContent='KONEK ✓';
+    document.getElementById('sv').style.color='#0f0';
+    document.getElementById('b2').style.display='block';
+  });
+  sk.on('disconnect',function(r){
+    lg('#f00','Putus:'+r);
+    document.getElementById('sv').textContent='PUTUS';
+    document.getElementById('sv').style.color='#f00';
+  });
+  sk.on('connect_error',function(e){
+    lg('#f00','Gagal konek server: '+e.message);
+    lg('#ff0','Pastikan HP & laptop 1 WiFi!');
+  });
+}
+
+function mulai(){
+  if(!sk||!sk.connected){lg('#f00','Server belum konek!');return;}
+  document.getElementById('b2').style.display='none';
+  document.getElementById('b3').style.display='block';
+  document.getElementById('st').textContent='KIRIM GPS';
+  lg('#0ff','watchPosition aktif...');
+
+  wid=navigator.geolocation.watchPosition(
+    function(p){
+      var c=p.coords;
+      var s=c.speed!=null?(c.speed*3.6).toFixed(1):'0';
+      var t=new Date().toLocaleTimeString('id-ID');
+      document.getElementById('sp').textContent=Math.round(parseFloat(s));
+      document.getElementById('la').textContent=c.latitude.toFixed(6);
+      document.getElementById('ln').textContent=c.longitude.toFixed(6);
+      document.getElementById('ac').textContent='+-'+c.accuracy.toFixed(0)+'m';
+      document.getElementById('wk').textContent=t;
+      sk.emit('driver-location',{
+        driverId:did,
+        driverName:document.getElementById('nm').value||'Driver',
+        lat:c.latitude, lng:c.longitude, speed:s,
+        accuracy:c.accuracy.toFixed(0),
+        heading:c.heading||0, altitude:c.altitude||0
+      });
+      n++; document.getElementById('ct').textContent=n;
+      if(n<=3||n%5===0)
+        lg('#0f0','['+t+'] '+c.latitude.toFixed(4)+','+c.longitude.toFixed(4)+' '+s+'kmh');
+    },
+    function(e){lg('#f00','GPS err:'+e.code);},
+    {enableHighAccuracy:true,timeout:20000,maximumAge:0}
+  );
+  setInterval(function(){if(sk&&sk.connected)sk.emit('ping-driver',{id:did});},15000);
+}
+
+function stop(){
+  if(wid){navigator.geolocation.clearWatch(wid);wid=null;}
+  document.getElementById('b2').style.display='block';
+  document.getElementById('b3').style.display='none';
+  document.getElementById('st').textContent='STOP';
+  lg('#ff0','Berhenti.');
+}
+</script>
+</body>
+</html>

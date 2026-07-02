@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momentify Fleet — Live Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --bg:#080c14; --surface:#0d1420; --surface2:#111b2e; --border:#1e2d45;
+    --accent:#00d4ff; --green:#00e676; --alert:#ff6b35; --warn:#ffcc00;
+    --red:#ff3d6b; --text:#e8f0fe; --muted:#5c7a9e; --dim:#3a5070;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Courier New',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* Header */
+  header {
+    height:54px; background:rgba(8,12,20,0.97); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px; flex-shrink:0; z-index:1000;
+  }
+  .logo { font-size:16px; font-weight:900; letter-spacing:2px; color:var(--accent); }
+  .logo span { color:#fff; }
+  .hdr-right { display:flex; align-items:center; gap:16px; font-size:11px; color:var(--muted); }
+  .live-badge { display:flex; align-items:center; gap:5px; color:var(--green); font-weight:700; }
+  .live-dot { width:6px; height:6px; background:var(--green); border-radius:50%; animation:blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  #clock { color:var(--muted); font-size:11px; }
+
+  /* Alert Banner */
+  #alertBanner {
+    background:linear-gradient(135deg,rgba(255,107,53,0.15),rgba(255,61,107,0.08));
+    border-bottom:1px solid rgba(255,107,53,0.3);
+    padding:8px 20px;
+    display:flex; align-items:center; gap:12px;
+    font-size:12px; flex-shrink:0;
+    transition:all 0.3s;
+  }
+  #alertBanner.hidden { display:none; }
+  .banner-icon { font-size:16px; animation:shake 1s ease 0.3s; }
+  @keyframes shake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-8deg)} 75%{transform:rotate(8deg)} }
+  #bannerText { flex:1; color:var(--alert); font-weight:700; letter-spacing:0.5px; }
+  #alertCountBadge {
+    background:var(--alert); color:#fff; font-size:10px; font-weight:700;
+    padding:2px 10px; border-radius:20px;
+    animation:badgePulse 2s infinite;
+  }
+  @keyframes badgePulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,107,53,0.4)} 50%{box-shadow:0 0 0 6px rgba(255,107,53,0)} }
+
+  /* Main layout */
+  .main { display:flex; flex:1; overflow:hidden; }
+
+  /* Map */
+  #map { flex:1; background:#0a1628; }
+
+  /* Override Leaflet dark */
+  .leaflet-tile { filter:brightness(0.7) saturate(0.8); }
+  .leaflet-control-zoom a { background:var(--surface)!important; color:var(--text)!important; border-color:var(--border)!important; }
+
+  /* Sidebar */
+  .sidebar {
+    width:320px; background:var(--surface); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden; flex-shrink:0;
+  }
+
+  /* Stat row */
+  .stat-row {
+    display:grid; grid-template-columns:1fr 1fr; gap:1px;
+    background:var(--border); border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .stat-box {
+    background:var(--surface); padding:12px 14px;
+    display:flex; flex-direction:column; gap:3px;
+  }
+  .stat-label { font-size:9px; letter-spacing:1.5px; color:var(--dim); text-transform:uppercase; }
+  .stat-val { font-size:26px; font-weight:900; line-height:1; }
+  .sv-green { color:var(--green); }
+  .sv-alert { color:var(--alert); }
+  .sv-warn  { color:var(--warn); }
+  .sv-blue  { color:var(--accent); }
+  .stat-sub { font-size:9px; color:var(--dim); }
+
+  /* Tabs */
+  .tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .tab {
+    flex:1; padding:10px; font-size:10px; font-weight:700; letter-spacing:1px;
+    text-align:center; cursor:pointer; color:var(--dim); transition:all 0.2s;
+    border-bottom:2px solid transparent;
+  }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab:hover { color:var(--text); }
+
+  /* Tab content */
+  .tab-content { flex:1; overflow-y:auto; padding:10px; display:none; }
+  .tab-content.active { display:block; }
+  .tab-content::-webkit-scrollbar { width:3px; }
+  .tab-content::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  /* Driver card */
+  .driver-card {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:8px; padding:12px; margin-bottom:8px;
+    border-left:3px solid var(--border); transition:border-color 0.3s;
+    cursor:pointer;
+  }
+  .driver-card:hover { border-left-color:var(--accent); }
+  .driver-card.active-driver { border-left-color:var(--green); }
+  .driver-card.alert-driver  { border-left-color:var(--alert); animation:cardFlash 2s infinite; }
+  @keyframes cardFlash { 0%,100%{background:var(--surface2)} 50%{background:rgba(255,107,53,0.06)} }
+
+  .dc-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .dc-name { font-size:13px; font-weight:700; }
+  .dc-id { font-size:9px; color:var(--dim); }
+
+  .pill { display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:0.5px; }
+  .pill-active { background:rgba(0,230,118,0.12); color:var(--green); border:1px solid rgba(0,230,118,0.2); }
+  .pill-alert  { background:rgba(255,107,53,0.12); color:var(--alert); border:1px solid rgba(255,107,53,0.3); animation:pillFlash 1.5s infinite; }
+  .pill-idle   { background:rgba(74,111,165,0.12); color:#4a6fa5; border:1px solid rgba(74,111,165,0.25); }
+  @keyframes pillFlash { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .dc-info { display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:10px; color:var(--muted); }
+  .dc-info span { color:var(--text); font-weight:600; }
+  .dc-bar-wrap { height:2px; background:var(--border); border-radius:1px; margin-top:8px; overflow:hidden; }
+  .dc-bar { height:100%; border-radius:1px; background:linear-gradient(90deg,var(--accent),var(--green)); transition:width 0.5s; }
+
+  /* Alert items */
+  .alert-item {
+    background:var(--surface2); border-radius:8px; padding:10px 12px;
+    margin-bottom:6px; border-left:3px solid var(--alert);
+    animation:alertIn 0.3s ease;
+  }
+  @keyframes alertIn { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
+  .ai-top { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .ai-tag { font-size:9px; font-weight:700; padding:1px 7px; border-radius:3px; background:rgba(255,107,53,0.12); color:var(--alert); letter-spacing:1px; }
+  .ai-time { font-size:9px; color:var(--dim); }
+  .ai-msg { font-size:11px; font-weight:700; margin-bottom:2px; }
+  .ai-detail { font-size:10px; color:var(--muted); }
+  .ai-ack { margin-top:6px; font-size:9px; padding:3px 10px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; font-family:monospace; transition:all 0.2s; }
+  .ai-ack:hover { border-color:var(--green); color:var(--green); }
+
+  .no-alert { text-align:center; padding:30px; color:var(--dim); font-size:11px; }
+
+  /* GPS raw log */
+  .gps-log-item { font-size:10px; color:var(--muted); padding:5px 0; border-bottom:1px solid rgba(30,45,69,0.3); line-height:1.6; }
+  .gps-log-item:last-child { border-bottom:none; }
+  .gps-log-item .ts { color:var(--dim); }
+  .gps-log-item .coord { color:var(--accent); font-weight:700; }
+  .gps-log-item .spd { color:var(--green); }
+
+  /* Toast */
+  .toast-container { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:6px; pointer-events:none; }
+  .toast {
+    background:var(--surface2); border:1px solid rgba(255,107,53,0.3);
+    border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px;
+    min-width:260px; pointer-events:all; box-shadow:0 8px 24px rgba(0,0,0,0.5);
+    animation:toastIn 0.3s ease;
+  }
+  @keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+  .toast-title { font-size:11px; font-weight:700; color:var(--alert); }
+  .toast-sub { font-size:10px; color:var(--muted); }
+  .toast-close { background:none; border:none; color:var(--dim); cursor:pointer; font-size:13px; padding:0 4px; }
+  .toast-close:hover { color:var(--text); }
+
+  /* Marker custom */
+  .custom-marker {
+    background:var(--accent); border:2px solid rgba(0,212,255,0.3);
+    border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+    width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+  }
+  .marker-alert { background:var(--alert)!important; border-color:rgba(255,107,53,0.3)!important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MOMENTIFY <span>FLEET</span></div>
+  <div class="hdr-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <span id="clock">--:--:--</span>
+    <span style="color:var(--dim)">|</span>
+    <span>OSRM v2</span>
+  </div>
+</header>
+
+<div id="alertBanner" class="hidden">
+  <div class="banner-icon">⚡</div>
+  <div id="bannerText">ALERT AKTIF</div>
+  <span id="alertCountBadge">0 ALERTS</span>
+</div>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div class="sidebar">
+    <!-- Stats -->
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-label">Driver Aktif</div>
+        <div class="stat-val sv-green" id="stActive">0</div>
+        <div class="stat-sub">terhubung</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Alert</div>
+        <div class="stat-val sv-alert" id="stAlert">0</div>
+        <div class="stat-sub">perlu perhatian</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Avg Speed</div>
+        <div class="stat-val sv-blue" id="stSpeed">0</div>
+        <div class="stat-sub">km/h rata-rata</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">GPS Points</div>
+        <div class="stat-val sv-warn" id="stPoints">0</div>
+        <div class="stat-sub">diterima</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('drivers',this)">👤 DRIVERS</div>
+      <div class="tab" onclick="switchTab('alerts',this)">⚡ ALERTS</div>
+      <div class="tab" onclick="switchTab('log',this)">📡 GPS LOG</div>
+    </div>
+
+    <!-- Drivers tab -->
+    <div class="tab-content active" id="tab-drivers">
+      <div id="driverList">
+        <div style="text-align:center;padding:30px;color:var(--dim);font-size:11px;">
+          ⏳ Menunggu driver connect...<br><br>
+          Buka <strong style="color:var(--accent)">http://[IP]:3000/driver</strong><br>di HP driver
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts tab -->
+    <div class="tab-content" id="tab-alerts">
+      <div id="alertList">
+        <div class="no-alert">✅ Tidak ada alert aktif</div>
+      </div>
+      <div style="text-align:right;padding:8px 4px">
+        <button onclick="clearAlerts()" style="font-size:10px;padding:4px 12px;border-radius:5px;border:1px solid rgba(255,107,53,0.3);background:rgba(255,107,53,0.1);color:var(--alert);cursor:pointer;font-family:monospace;">CLEAR ALL</button>
+      </div>
+    </div>
+
+    <!-- GPS Log tab -->
+    <div class="tab-content" id="tab-log">
+      <div id="gpsLog"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────
+const drivers = {};        // socketId → data
+const markers = {};        // socketId → Leaflet marker
+const paths   = {};        // socketId → Leaflet polyline
+const coords  = {};        // socketId → array of [lat,lng]
+let totalPoints = 0;
+let alertCount = 0;
+let gpsLogCount = 0;
+
+// ── Map init ──────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([-6.2088, 106.8456], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// ── Socket.IO ─────────────────────────────────────────────
+const socket = io();
+
+socket.on('connect', () => {
+  showToast('🟢 Terhubung', 'Dashboard online · Menunggu GPS driver', 'ok');
+});
+
+socket.on('disconnect', () => {
+  showToast('🔴 Terputus', 'Koneksi ke server hilang!', 'err');
+});
+
+// State awal semua driver
+socket.on('drivers-state', (driverList) => {
+  driverList.forEach(d => updateDriver(d));
+});
+
+// GPS update realtime
+socket.on('gps-update', (data) => {
+  updateDriver(data);
+  totalPoints++;
+  document.getElementById('stPoints').textContent = totalPoints;
+
+  // GPS Log
+  addGpsLog(data);
+
+  // Cek speed alert
+  if (parseFloat(data.speed) > 80) {
+    addAlert('OVERSPEED', `🚨 Kecepatan berlebih — ${data.name}`, `${data.speed} km/h di jalan (limit: 80 km/h)`, 'critical');
+  }
+});
+
+// Driver disconnect
+socket.on('driver-offline', (info) => {
+  if (markers[info.socketId]) {
+    map.removeLayer(markers[info.socketId]);
+    delete markers[info.socketId];
+  }
+  if (paths[info.socketId]) {
+    map.removeLayer(paths[info.socketId]);
+    delete paths[info.socketId];
+  }
+  delete drivers[info.socketId];
+  delete coords[info.socketId];
+  renderDriverList();
+  updateStats();
+  showToast('❌ Driver Offline', `${info.name} terputus dari server`, 'warn');
+});
+
+// ── Update driver di peta ─────────────────────────────────
+function updateDriver(data) {
+  drivers[data.socketId] = data;
+  const lat = parseFloat(data.lat);
+  const lng = parseFloat(data.lng);
+  const spd = parseFloat(data.speed) || 0;
+  const isAlert = spd > 80;
+
+  // Track path
+  if (!coords[data.socketId]) coords[data.socketId] = [];
+  coords[data.socketId].push([lat, lng]);
+  if (coords[data.socketId].length > 200) coords[data.socketId].shift(); // cap 200 pts
+
+  // Update atau buat marker
+  if (markers[data.socketId]) {
+    markers[data.socketId].setLatLng([lat, lng]);
+    // Update popup
+    markers[data.socketId].getPopup().setContent(popupContent(data));
+
+    // Ganti icon kalau perlu
+    const icon = makeIcon(data.name, isAlert);
+    markers[data.socketId].setIcon(icon);
+  } else {
+    // Buat marker baru
+    const icon = makeIcon(data.name, isAlert);
+    const marker = L.marker([lat, lng], { icon })
+      .addTo(map)
+      .bindPopup(popupContent(data));
+    markers[data.socketId] = marker;
+
+    // Auto-zoom ke driver pertama
+    if (Object.keys(markers).length === 1) {
+      map.setView([lat, lng], 16);
+      showToast('📍 Driver Terhubung', `${data.name} mulai mengirim GPS`, 'ok');
+    }
+  }
+
+  // Update polyline path
+  if (paths[data.socketId]) {
+    paths[data.socketId].setLatLngs(coords[data.socketId]);
+  } else {
+    paths[data.socketId] = L.polyline(coords[data.socketId], {
+      color: isAlert ? '#ff6b35' : '#00d4ff',
+      weight: 2.5,
+      opacity: 0.7,
+      dashArray: isAlert ? '6,4' : null
+    }).addTo(map);
+  }
+
+  // Update path color on speed change
+  paths[data.socketId].setStyle({
+    color: isAlert ? '#ff6b35' : '#00d4ff',
+    dashArray: isAlert ? '6,4' : null
+  });
+
+  renderDriverList();
+  updateStats();
+}
+
+function makeIcon(name, isAlert) {
+  const initial = name ? name.slice(0,2).toUpperCase() : 'DR';
+  const color = isAlert ? '#ff6b35' : '#00d4ff';
+  const bg    = isAlert ? 'rgba(255,107,53,0.2)' : 'rgba(0,212,255,0.2)';
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${color};border:2px solid ${bg};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;font-family:monospace;box-shadow:0 0 12px ${color}66;${isAlert ? 'animation:badgePulse 1s infinite;' : ''}">${initial}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -20]
+  });
+}
+
+function popupContent(d) {
+  const spd = parseFloat(d.speed)||0;
+  return `<div style="font-family:monospace;font-size:11px;line-height:1.8;min-width:160px;background:#0d1420;color:#e8f0fe;padding:4px">
+    <div style="font-size:13px;font-weight:900;color:#00d4ff;margin-bottom:6px">${d.name}</div>
+    <div>📍 ${parseFloat(d.lat).toFixed(6)}, ${parseFloat(d.lng).toFixed(6)}</div>
+    <div>⚡ ${spd} km/h ${spd>80?'<span style="color:#ff6b35">⚠ OVER</span>':''}</div>
+    <div>🎯 Akurasi: ±${d.accuracy} m</div>
+    <div style="color:#3a5070;font-size:10px;margin-top:4px">${new Date(d.timestamp).toLocaleTimeString('id-ID')}</div>
+  </div>`;
+}
+
+// ── Driver List Render ────────────────────────────────────
+function renderDriverList() {
+  const list = document.getElementById('driverList');
+  const keys = Object.keys(drivers);
+
+  if (keys.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--dim);font-size:11px;">⏳ Menunggu driver connect...<br><br>Buka <strong style="color:#00d4ff">http://[IP]:3000/driver</strong><br>di HP driver</div>';
+    return;
+  }
+
+  list.innerHTML = keys.map(sid => {
+    const d = drivers[sid];
+    const spd = parseFloat(d.speed)||0;
+    const isAlert = spd > 80;
+    const since = Math.floor((Date.now() - d.timestamp) / 1000);
+    return `
+    <div class="driver-card ${isAlert?'alert-driver':'active-driver'}" onclick="focusDriver('${sid}')">
+      <div class="dc-top">
+        <div>
+          <div class="dc-name">${d.name}</div>
+          <div class="dc-id">${d.id}</div>
+        </div>
+        <span class="pill ${isAlert?'pill-alert':'pill-active'}">${isAlert?'⚡ ALERT':'● AKTIF'}</span>
+      </div>
+      <div class="dc-info">
+        <div>Lat<br><span>${parseFloat(d.lat).toFixed(5)}</span></div>
+        <div>Lng<br><span>${parseFloat(d.lng).toFixed(5)}</span></div>
+        <div>Speed<br><span style="color:${isAlert?'#ff6b35':'#00e676'}">${spd} km/h</span></div>
+        <div>Akurasi<br><span>±${d.accuracy}m</span></div>
+      </div>
+      <div class="dc-bar-wrap"><div class="dc-bar" style="width:${Math.min(spd/100*100,100)}%;background:${isAlert?'linear-gradient(90deg,#ff6b35,#ff3d6b)':'linear-gradient(90deg,#00d4ff,#00e676)'}"></div></div>
+      <div style="font-size:9px;color:var(--dim);margin-top:5px">Update ${since}s lalu</div>
+    </div>`;
+  }).join('');
+}
+
+function focusDriver(sid) {
+  if (markers[sid]) {
+    map.setView(markers[sid].getLatLng(), 17, { animate: true });
+    markers[sid].openPopup();
+  }
+}
+
+// ── Stats Update ──────────────────────────────────────────
+function updateStats() {
+  const driverCount = Object.keys(drivers).length;
+  const speeds = Object.values(drivers).map(d => parseFloat(d.speed)||0);
+  const avgSpd = speeds.length ? (speeds.reduce((a,b)=>a+b,0)/speeds.length).toFixed(0) : 0;
+
+  document.getElementById('stActive').textContent = driverCount;
+  document.getElementById('stSpeed').textContent  = avgSpd;
+}
+
+// ── Alert System ──────────────────────────────────────────
+let alertIds = 0;
+function addAlert(tag, msg, detail, level='warning') {
+  alertCount++;
+  alertIds++;
+  document.getElementById('stAlert').textContent = alertCount;
+
+  // Banner
+  const banner = document.getElementById('alertBanner');
+  banner.classList.remove('hidden');
+  document.getElementById('bannerText').textContent = `${alertCount} alert aktif — ${msg}`;
+  document.getElementById('alertCountBadge').textContent = alertCount+' ALERTS';
+
+  // Alert list
+  const list = document.getElementById('alertList');
+  const no = list.querySelector('.no-alert');
+  if (no) no.remove();
+
+  const el = document.createElement('div');
+  el.className = 'alert-item';
+  el.id = 'al-'+alertIds;
+  const now = new Date().toLocaleTimeString('id-ID');
+  el.innerHTML = `
+    <div class="ai-top">
+      <span class="ai-tag">${tag}</span>
+      <span class="ai-time">${now}</span>
+    </div>
+    <div class="ai-msg">${msg}</div>
+    <div class="ai-detail">${detail}</div>
+    <button class="ai-ack" onclick="ackAlert('al-${alertIds}')">ACK</button>
+  `;
+  list.prepend(el);
+
+  // Toast
+  showToast(msg, detail, level === 'critical' ? 'err' : 'warn');
+}
+
+function ackAlert(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.opacity='0.35'; el.style.pointerEvents='none';
+  el.querySelector('.ai-ack').textContent = '✓ ACKNOWLEDGED';
+  alertCount = Math.max(0, alertCount-1);
+  document.getElementById('stAlert').textContent = alertCount;
+  document.getElementById('alertCountBadge').textContent = alertCount+' ALERTS';
+  if (alertCount === 0) {
+    document.getElementById('alertBanner').classList.add('hidden');
+  }
+}
+
+function clearAlerts() {
+  document.getElementById('alertList').innerHTML = '<div class="no-alert">✅ Tidak ada alert aktif</div>';
+  alertCount = 0;
+  document.getElementById('stAlert').textContent = 0;
+  document.getElementById('alertBanner').classList.add('hidden');
+}
+
+// ── GPS Log ───────────────────────────────────────────────
+function addGpsLog(d) {
+  gpsLogCount++;
+  const log = document.getElementById('gpsLog');
+  const el = document.createElement('div');
+  el.className = 'gps-log-item';
+  const t = new Date(d.timestamp).toLocaleTimeString('id-ID');
+  el.innerHTML = `<span class="ts">[${t}]</span> <strong>${d.name}</strong> → <span class="coord">${parseFloat(d.lat).toFixed(6)}, ${parseFloat(d.lng).toFixed(6)}</span> · <span class="spd">${d.speed} km/h</span> · ±${d.accuracy}m`;
+  log.prepend(el);
+  // Cap 100 entries
+  while (log.children.length > 100) log.removeChild(log.lastChild);
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function showToast(title, sub, type='ok') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  const color = type==='err' ? '#ff3d6b' : type==='warn' ? '#ff6b35' : '#00e676';
+  t.className = 'toast';
+  t.style.borderColor = color+'44';
+  t.innerHTML = `<div style="flex:1"><div class="toast-title" style="color:${color}">${title}</div><div class="toast-sub">${sub}</div></div><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 5000);
+}
+
+// ── Tabs ──────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// ── Clock ─────────────────────────────────────────────────
+function tick() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('id-ID'); }
+setInterval(tick, 1000); tick();
+
+// ── Refresh driver list setiap 5s ─────────────────────────
+setInterval(renderDriverList, 5000);
+</script>
+</body>
+</html>

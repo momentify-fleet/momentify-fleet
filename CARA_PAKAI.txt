@@ -1,0 +1,83 @@
+================================================
+  MOMENTIFY FLEET — CARA PAKAI
+================================================
+
+STRUKTUR FOLDER:
+  C:\momentify_fleet\
+  ├── server.js
+  ├── package.json
+  ├── CARA_PAKAI.txt
+  └── public\
+      ├── dashboard.html   ← buka di browser laptop
+      └── driver.html      ← buka di HP driver
+
+------------------------------------------------
+LANGKAH 1 — INSTALL (sekali saja)
+------------------------------------------------
+Buka Command Prompt / PowerShell:
+
+  cd C:\momentify_fleet
+  npm install
+
+------------------------------------------------
+LANGKAH 2 — JALANKAN SERVER
+------------------------------------------------
+  node server.js
+
+Output yang muncul:
+  ✅ Server running on :3000
+  Dashboard : http://localhost:3000
+  Driver HP : http://[IP-ANDA]:3000/driver
+
+------------------------------------------------
+LANGKAH 3 — CARI IP LOKAL LAPTOP
+------------------------------------------------
+Buka CMD baru, ketik:
+  ipconfig
+
+Cari "IPv4 Address" misal: 192.168.1.10
+
+------------------------------------------------
+LANGKAH 4 — BUKA DASHBOARD (Laptop Investor)
+------------------------------------------------
+Buka browser laptop:
+  http://localhost:3000
+
+------------------------------------------------
+LANGKAH 5 — HP DRIVER
+------------------------------------------------
+HP dan Laptop harus 1 WiFi yang sama!
+
+Buka browser Chrome di HP:
+  http://192.168.1.10:3000/driver
+  (ganti IP sesuai hasil ipconfig)
+
+Tap "MULAI TRACKING GPS"
+→ Izinkan akses lokasi
+→ Koordinat GPS langsung muncul di dashboard!
+
+------------------------------------------------
+TIPS DEMO INVESTOR
+------------------------------------------------
+✓ Kedua layar berdampingan (HP + laptop)
+✓ Jalan keluar ruangan → marker bergerak di peta
+✓ Speed otomatis terhitung dari GPS hardware
+✓ Alert muncul otomatis kalau kecepatan > 80 km/h
+✓ Jalur pergerakan terekam sebagai polyline biru
+
+------------------------------------------------
+TROUBLESHOOT
+------------------------------------------------
+• GPS tidak muncul di HP?
+  → Pastikan GPS HP aktif (bukan mode hemat baterai)
+  → Gunakan Chrome, bukan UC Browser/Opera Mini
+  → HTTPS tidak dibutuhkan untuk localhost
+
+• Tidak konek ke server?
+  → Pastikan HP dan laptop pakai WiFi yang SAMA
+  → Cek IP dengan ipconfig, buka di HP persis itu
+
+• Port 3000 sudah dipakai?
+  → Ganti PORT=3001 di server.js baris terakhir
+
+================================================

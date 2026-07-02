@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Driver GPS</title>
+</head>
+<body style="margin:0;padding:0;background:#080c14;color:#e8f0fe;font-family:monospace;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px 16px;gap:10px;box-sizing:border-box">
+
+<div style="font-size:20px;font-weight:900;letter-spacing:2px;color:#00d4ff;text-align:center">
+  MOMENTIFY <span style="color:#fff">FLEET</span>
+</div>
+<div style="font-size:10px;color:#3a5070;letter-spacing:2px">DRIVER GPS TRACKER v3</div>
+
+<!-- STATUS BADGE -->
+<div id="badge" style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-radius:30px;font-size:12px;font-weight:700;width:100%;max-width:360px;background:rgba(255,204,0,0.1);border:1px solid rgba(255,204,0,0.35);color:#ffcc00;justify-content:center">
+  <div id="dot" style="width:7px;height:7px;border-radius:50%;background:currentColor"></div>
+  <span id="badgeText">TAP TOMBOL KUNING DI BAWAH</span>
+</div>
+
+<!-- STEP BAR -->
+<div style="display:flex;width:100%;max-width:360px;gap:0">
+  <div id="s1" style="flex:1;text-align:center;padding:7px 2px;font-size:9px;letter-spacing:1px;color:#00d4ff;border-bottom:2px solid #00d4ff">1.IZIN GPS</div>
+  <div id="s2" style="flex:1;text-align:center;padding:7px 2px;font-size:9px;letter-spacing:1px;color:#3a5070;border-bottom:2px solid #1e2d45">2.SERVER</div>
+  <div id="s3" style="flex:1;text-align:center;padding:7px 2px;font-size:9px;letter-spacing:1px;color:#3a5070;border-bottom:2px solid #1e2d45">3.KIRIM</div>
+</div>
+
+<!-- NAMA -->
+<div style="font-size:9px;color:#3a5070;letter-spacing:1.5px;width:100%;max-width:360px">NAMA DRIVER</div>
+<input id="driverName" value="Demo Driver"
+  style="width:100%;max-width:360px;background:#0d1420;border:1px solid #1e2d45;border-radius:8px;padding:11px 14px;color:#e8f0fe;font-size:13px;font-family:monospace;outline:none;box-sizing:border-box">
+
+<!-- SPEEDOMETER -->
+<div style="width:100%;max-width:360px;background:#0d1420;border:1px solid #1e2d45;border-radius:14px;padding:16px;text-align:center">
+  <div id="spdNum" style="font-size:68px;font-weight:900;color:#00d4ff;line-height:1;transition:color 0.3s">0</div>
+  <div style="font-size:11px;color:#5c7a9e;margin-top:2px">km/h</div>
+  <div style="height:4px;background:#1e2d45;border-radius:2px;margin-top:8px;overflow:hidden">
+    <div id="spdBar" style="height:100%;border-radius:2px;background:linear-gradient(90deg,#00d4ff,#00e676);width:0%;transition:width 0.5s"></div>
+  </div>
+</div>
+
+<!-- GPS DATA -->
+<div style="width:100%;max-width:360px;background:#0d1420;border:1px solid #1e2d45;border-radius:12px;padding:14px">
+  <div style="font-size:9px;letter-spacing:2px;color:#3a5070;text-transform:uppercase;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid #111b2e">📡 DATA GPS</div>
+  <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.3)"><span style="font-size:11px;color:#5c7a9e">Latitude</span><span id="vLat" style="font-size:12px;font-weight:700;color:#00d4ff">—</span></div>
+  <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.3)"><span style="font-size:11px;color:#5c7a9e">Longitude</span><span id="vLng" style="font-size:12px;font-weight:700;color:#00d4ff">—</span></div>
+  <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.3)"><span style="font-size:11px;color:#5c7a9e">Akurasi</span><span id="vAcc" style="font-size:12px;font-weight:700;color:#00d4ff">—</span></div>
+  <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.3)"><span style="font-size:11px;color:#5c7a9e">Heading</span><span id="vHead" style="font-size:12px;font-weight:700;color:#00d4ff">—</span></div>
+  <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:11px;color:#5c7a9e">Waktu</span><span id="vTime" style="font-size:11px;font-weight:700;color:#3a5070">—</span></div>
+</div>
+
+<div style="font-size:10px;color:#3a5070;text-align:center">Terkirim: <b id="cnt" style="color:#00d4ff">0</b> titik GPS</div>
+
+<!-- TOMBOL STEP 1: IZIN GPS -->
+<button id="btnPerm" onclick="mintaIzin()"
+  style="width:100%;max-width:360px;padding:16px;border-radius:10px;border:none;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:monospace;background:linear-gradient(135deg,#ffcc00,#ff6b35);color:#000">
+  📍 STEP 1 — IZINKAN AKSES GPS
+</button>
+
+<!-- TOMBOL STEP 2: MULAI KIRIM (tersembunyi dulu) -->
+<button id="btnGo" onclick="startGPS()"
+  style="width:100%;max-width:360px;padding:16px;border-radius:10px;border:none;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:monospace;background:linear-gradient(135deg,#00d4ff,#0055ff);color:#fff;display:none">
+  ▶ STEP 2 — MULAI KIRIM GPS
+</button>
+
+<!-- TOMBOL STOP -->
+<button id="btnStop" onclick="stopGPS()"
+  style="width:100%;max-width:360px;padding:15px;border-radius:10px;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:monospace;background:rgba(255,61,107,0.1);border:1px solid rgba(255,61,107,0.3);color:#ff3d6b;display:none">
+  ■ STOP TRACKING
+</button>
+
+<!-- LOG -->
+<div id="logBox"
+  style="width:100%;max-width:360px;background:#0d1420;border:1px solid #1e2d45;border-radius:10px;padding:10px;max-height:90px;overflow-y:auto;font-size:10px;color:#3a5070;line-height:1.9">
+  <div>— ikuti langkah di atas —</div>
+</div>
+
+<!-- Load socket.io dari server yg sama -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+var socket   = null;
+var watchId  = null;
+var count    = 0;
+var driverId = 'D' + Math.floor(Math.random()*900+100);
+
+// ─── STEP 1: Minta izin GPS dulu ─────────────────────────
+function mintaIzin() {
+  log('warn','Meminta izin GPS dari Chrome...');
+  setBadge('rgba(255,204,0,0.1)','rgba(255,204,0,0.35)','#ffcc00','⏳ MENUNGGU IZIN LOKASI...');
+
+  if (!navigator.geolocation) {
+    log('err','GPS tidak didukung! Pakai Chrome.');
+    setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','❌ GPS TIDAK ADA');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      log('ok','✅ Izin GPS diberikan!');
+      log('ok','Lat: ' + pos.coords.latitude.toFixed(6));
+      log('ok','Akurasi: ±' + pos.coords.accuracy.toFixed(0) + 'm');
+
+      stepOk('s1');
+      setBadge('rgba(255,204,0,0.1)','rgba(255,204,0,0.35)','#ffcc00','🔌 MENGHUBUNGKAN KE SERVER...');
+      document.getElementById('btnPerm').style.display = 'none';
+
+      // Konek socket SETELAH izin GPS confirmed
+      initSocket();
+    },
+    function(err) {
+      if (err.code === 1) {
+        log('err','DITOLAK! Tap ikon segitiga/gembok di address bar → Izin Lokasi → Izinkan');
+        setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','❌ IZIN GPS DITOLAK');
+      } else if (err.code === 2) {
+        log('err','GPS lemah. Coba keluar ruangan atau matikan mode hemat baterai.');
+        setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','❌ SINYAL GPS LEMAH');
+      } else {
+        log('err','GPS timeout. Coba tap tombol lagi.');
+        setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','❌ GPS TIMEOUT');
+      }
+      // Tampilkan lagi tombolnya biar bisa coba ulang
+      document.getElementById('btnPerm').style.display = 'block';
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ─── Init Socket setelah GPS siap ────────────────────────
+function initSocket() {
+  socket = io({
+    transports: ['websocket','polling'],
+    reconnection: true,
+    reconnectionDelay: 2000,
+    reconnectionAttempts: 20,
+    pingTimeout:  60000,
+    pingInterval: 10000
+  });
+
+  socket.on('connect', function() {
+    stepOk('s2');
+    setBadge('rgba(0,230,118,0.1)','rgba(0,230,118,0.3)','#00e676','🟢 SERVER OK — TAP MULAI');
+    log('ok','Terhubung ke server · ' + socket.id.slice(0,8));
+    document.getElementById('btnGo').style.display = 'block';
+  });
+
+  socket.on('disconnect', function(reason) {
+    setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','🔴 SERVER PUTUS: ' + reason);
+    log('err','Disconnect: ' + reason);
+  });
+
+  socket.on('reconnect', function(n) {
+    setBadge('rgba(0,230,118,0.1)','rgba(0,230,118,0.3)','#00e676','🟢 RECONNECT #' + n);
+    log('ok','Reconnect berhasil #' + n);
+  });
+
+  socket.on('connect_error', function(e) {
+    setBadge('rgba(255,61,107,0.1)','rgba(255,61,107,0.3)','#ff3d6b','🔴 GAGAL KONEK');
+    log('err','Error: ' + e.message);
+  });
+}
+
+// ─── STEP 2: Mulai watchPosition ─────────────────────────
+function startGPS() {
+  if (!socket || !socket.connected) {
+    log('err','Server belum konek! Tunggu...');
+    return;
+  }
+  document.getElementById('btnGo').style.display   = 'none';
+  document.getElementById('btnStop').style.display = 'block';
+  stepOk('s3');
+  setBadge('rgba(0,212,255,0.1)','rgba(0,212,255,0.3)','#00d4ff','📡 MENGIRIM GPS...');
+  log('ok','watchPosition aktif — GPS berjalan');
+
+  watchId = navigator.geolocation.watchPosition(
+    onGPS,
+    function(e) {
+      var m = {1:'Izin dicabut!',2:'Sinyal GPS hilang',3:'GPS timeout'};
+      log('err', m[e.code] || e.message);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+
+  // Keepalive agar socket tidak putus
+  window._ka = setInterval(function() {
+    if (socket && socket.connected) socket.emit('ping-driver',{id:driverId});
+  }, 15000);
+}
+
+function stopGPS() {
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (window._ka) { clearInterval(window._ka); }
+  document.getElementById('btnGo').style.display   = 'block';
+  document.getElementById('btnStop').style.display = 'none';
+  setBadge('rgba(0,230,118,0.1)','rgba(0,230,118,0.3)','#00e676','🟢 BERHENTI');
+  log('warn','Tracking dihentikan');
+}
+
+// ─── GPS Data masuk ───────────────────────────────────────
+function onGPS(pos) {
+  var c   = pos.coords;
+  var spd = (c.speed != null && c.speed > 0) ? (c.speed * 3.6).toFixed(1) : '0';
+  var now = new Date().toLocaleTimeString('id-ID');
+
+  document.getElementById('vLat').textContent  = c.latitude.toFixed(7);
+  document.getElementById('vLng').textContent  = c.longitude.toFixed(7);
+  document.getElementById('vAcc').textContent  = '±' + c.accuracy.toFixed(0) + 'm';
+  document.getElementById('vHead').textContent = c.heading != null ? c.heading.toFixed(0)+'°' : '—';
+  document.getElementById('vTime').textContent = now;
+
+  var s  = parseFloat(spd);
+  var el = document.getElementById('spdNum');
+  el.textContent = Math.round(s);
+  el.style.color = s > 80 ? '#ff3d6b' : s > 50 ? '#ffcc00' : '#00d4ff';
+
+  var bar = document.getElementById('spdBar');
+  bar.style.width = Math.min(s / 100 * 100, 100) + '%';
+  bar.style.background = s > 80
+    ? 'linear-gradient(90deg,#ff3d6b,#ff6b35)'
+    : s > 50 ? 'linear-gradient(90deg,#ffcc00,#ff6b35)'
+    : 'linear-gradient(90deg,#00d4ff,#00e676)';
+
+  if (socket && socket.connected) {
+    socket.emit('driver-location', {
+      driverId:   driverId,
+      driverName: document.getElementById('driverName').value || 'Driver',
+      lat:        c.latitude,
+      lng:        c.longitude,
+      speed:      spd,
+      accuracy:   c.accuracy.toFixed(0),
+      heading:    c.heading  || 0,
+      altitude:   c.altitude || 0
+    });
+    count++;
+    document.getElementById('cnt').textContent = count;
+    if (count <= 3 || count % 5 === 0) {
+      log('ok','['+now+'] '+c.latitude.toFixed(5)+','+c.longitude.toFixed(5)+' · '+spd+' km/h');
+    }
+  } else {
+    log('warn','Socket putus — data tidak terkirim saat ini');
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────
+function setBadge(bg, border, color, text) {
+  var b = document.getElementById('badge');
+  b.style.background   = bg;
+  b.style.border       = '1px solid ' + border;
+  b.style.color        = color;
+  document.getElementById('badgeText').textContent = text;
+}
+function stepOk(id) {
+  var el = document.getElementById(id);
+  el.style.color       = '#00e676';
+  el.style.borderBottom = '2px solid #00e676';
+}
+function log(type, msg) {
+  var b = document.getElementById('logBox');
+  var d = document.createElement('div');
+  d.style.color = type==='ok' ? '#00e676' : type==='warn' ? '#ffcc00' : '#ff3d6b';
+  d.textContent = '> ' + msg;
+  b.appendChild(d);
+  b.scrollTop = b.scrollHeight;
+}
+
+log('ok','Browser GPS support ✓');
+log('warn','Tap tombol KUNING untuk mulai');
+</script>
+</body>
+</html>
