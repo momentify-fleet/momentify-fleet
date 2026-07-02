@@ -274,7 +274,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 // ── Socket.IO ─────────────────────────────────────────────
-const socket = io();
+const socket = io('https://momentify-fleet-production.up.railway.app');
 
 socket.on('connect', () => {
   showToast('🟢 Terhubung', 'Dashboard online · Menunggu GPS driver', 'ok');
