@@ -1,162 +1,424 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GPS</title>
-<!-- socket.io dari CDN, bukan server lokal -->
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#080c14">
+<meta name="apple-mobile-web-app-title" content="MF Driver">
+<title>Momentify Driver</title>
+<link rel="manifest" href="/manifest.json">
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#080c14;color:#e8f0fe;font-family:'Courier New',monospace;
+     min-height:100vh;min-height:-webkit-fill-available;
+     display:flex;flex-direction:column;align-items:center;
+     padding:16px;gap:10px;overflow-x:hidden}
+
+/* Install banner */
+#installBanner{width:100%;max-width:380px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(0,85,255,0.1));
+  border:1px solid rgba(0,212,255,0.3);border-radius:10px;padding:10px 14px;
+  display:none;align-items:center;gap:10px;cursor:pointer}
+#installBanner.show{display:flex}
+.ib-icon{font-size:22px}
+.ib-text{flex:1}
+.ib-title{font-size:11px;font-weight:700;color:#00d4ff;letter-spacing:1px}
+.ib-sub{font-size:10px;color:#5c7a9e}
+.ib-btn{background:#00d4ff;color:#000;border:none;padding:6px 12px;border-radius:6px;
+        font-size:10px;font-weight:800;cursor:pointer;font-family:monospace;white-space:nowrap}
+
+.logo{text-align:center}
+.logo h1{font-size:20px;font-weight:900;letter-spacing:2px;color:#00d4ff}
+.logo h1 span{color:#fff}
+.logo p{font-size:9px;color:#3a5070;letter-spacing:2px;margin-top:2px}
+
+/* Status */
+.badge{display:flex;align-items:center;justify-content:center;gap:7px;
+       padding:9px 20px;border-radius:30px;font-size:11px;font-weight:700;
+       width:100%;max-width:380px;transition:all 0.3s;letter-spacing:0.5px}
+.st-wait{background:rgba(255,204,0,0.1);border:1px solid rgba(255,204,0,0.35);color:#ffcc00}
+.st-bad {background:rgba(255,61,107,0.1);border:1px solid rgba(255,61,107,0.3);color:#ff3d6b}
+.st-ok  {background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:#00e676}
+.st-send{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);color:#00d4ff}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.st-send .dot,.st-wait .dot{animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* Steps */
+.steps{display:flex;width:100%;max-width:380px}
+.step{flex:1;text-align:center;padding:7px 2px;font-size:9px;letter-spacing:1px;
+      color:#3a5070;border-bottom:2px solid #1e2d45;transition:all 0.3s}
+.step.done{color:#00e676;border-bottom-color:#00e676}
+.step.active{color:#00d4ff;border-bottom-color:#00d4ff}
+
+/* Speedometer */
+.spd-box{width:100%;max-width:380px;background:#0d1420;border:1px solid #1e2d45;
+          border-radius:14px;padding:14px;text-align:center}
+.spd-num{font-size:72px;font-weight:900;color:#00d4ff;line-height:1;transition:color 0.3s}
+.spd-num.warn  {color:#ffcc00}
+.spd-num.danger{color:#ff3d6b;animation:spd-flash 0.5s infinite}
+@keyframes spd-flash{0%,100%{opacity:1}50%{opacity:0.7}}
+.spd-unit{font-size:11px;color:#5c7a9e;margin-top:2px}
+.spd-bar-w{height:5px;background:#1e2d45;border-radius:3px;margin-top:10px;overflow:hidden}
+.spd-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#00d4ff,#00e676);transition:width 0.5s}
+
+/* GPS Data */
+.card{width:100%;max-width:380px;background:#0d1420;border:1px solid #1e2d45;border-radius:12px;padding:14px}
+.ctitle{font-size:9px;letter-spacing:2px;color:#3a5070;text-transform:uppercase;
+         margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #111b2e}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,69,0.3)}
+.row:last-child{border-bottom:none}
+.rl{font-size:11px;color:#5c7a9e}
+.rv{font-size:12px;font-weight:700;color:#00d4ff;text-align:right}
+.rv.dim{color:#3a5070}
+
+/* Input */
+label{font-size:9px;color:#3a5070;letter-spacing:1.5px;display:block;width:100%;max-width:380px;margin-bottom:5px}
+input[type=text]{width:100%;max-width:380px;background:#0d1420;border:1px solid #1e2d45;
+  border-radius:8px;padding:11px 14px;color:#e8f0fe;font-size:13px;font-family:monospace;outline:none}
+input[type=text]:focus{border-color:#00d4ff}
+
+.cnt{font-size:10px;color:#3a5070;text-align:center}
+.cnt b{color:#00d4ff}
+
+/* Buttons */
+.btn{width:100%;max-width:380px;padding:15px;border-radius:10px;border:none;
+     font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;
+     font-family:monospace;transition:transform 0.1s;-webkit-appearance:none}
+.btn:active{transform:scale(0.97)}
+.btn-perm{background:linear-gradient(135deg,#ffcc00,#ff6b35);color:#000}
+.btn-go  {background:linear-gradient(135deg,#00d4ff,#0055ff);color:#fff;display:none}
+.btn-stop{background:rgba(255,61,107,0.1);border:1px solid rgba(255,61,107,0.3);
+           color:#ff3d6b;display:none}
+
+/* Log */
+.log{width:100%;max-width:380px;background:#0d1420;border:1px solid #1e2d45;
+      border-radius:10px;padding:10px;max-height:90px;overflow-y:auto;
+      font-size:10px;color:#3a5070;line-height:1.9}
+.ok  {color:#00e676}
+.warn{color:#ffcc00}
+.err {color:#ff3d6b}
+
+/* Offline indicator */
+#offlineBadge{display:none;width:100%;max-width:380px;background:rgba(255,61,107,0.1);
+  border:1px solid rgba(255,61,107,0.3);border-radius:8px;padding:8px 14px;
+  font-size:11px;color:#ff3d6b;text-align:center;font-weight:700}
+#offlineBadge.show{display:block}
+</style>
 </head>
-<body style="background:#000;color:#0f0;font-family:monospace;padding:20px;margin:0;font-size:15px">
+<body>
 
-<h2 style="color:#0ff;margin:0 0 12px">MOMENTIFY GPS v4</h2>
-
-Status: <b id="st" style="color:#ff0">SIAP</b><br>
-Server: <b id="sv" style="color:#f00">BELUM KONEK</b><br>
-Kirim: <b id="ct">0</b> titik<br><br>
-
-Nama:<br>
-<input id="nm" value="Demo Driver"
-style="background:#111;color:#0f0;border:1px solid #0f0;padding:8px;width:90%;font-size:15px;font-family:monospace;margin-bottom:12px"><br>
-
-Speed: <b id="sp" style="font-size:40px;color:#0ff">0</b> km/h<br>
-Lat: <b id="la">-</b><br>
-Lng: <b id="ln">-</b><br>
-Akurasi: <b id="ac">-</b><br>
-Waktu: <b id="wk">-</b><br><br>
-
-<button id="b1" onclick="izin()"
-style="background:#ff0;color:#000;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:block">
-TAP INI DULU — IZIN GPS
-</button>
-
-<button id="b2" onclick="mulai()"
-style="background:#0f0;color:#000;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:none">
-MULAI KIRIM GPS
-</button>
-
-<button id="b3" onclick="stop()"
-style="background:#f00;color:#fff;padding:16px;width:100%;font-size:16px;font-weight:bold;border:none;cursor:pointer;margin-bottom:10px;display:none">
-STOP
-</button>
-
-<div id="log" style="font-size:11px;color:#555;margin-top:8px;max-height:120px;overflow-y:auto;border-top:1px solid #222;padding-top:8px">
-<div style="color:#555">> app siap</div>
+<!-- Install Banner PWA -->
+<div id="installBanner">
+  <div class="ib-icon">📱</div>
+  <div class="ib-text">
+    <div class="ib-title">INSTALL APLIKASI</div>
+    <div class="ib-sub">Tambah ke homescreen untuk akses cepat</div>
+  </div>
+  <button class="ib-btn" onclick="installPWA()">INSTALL</button>
 </div>
 
+<div class="logo">
+  <h1>MOMENTIFY <span>FLEET</span></h1>
+  <p>DRIVER GPS TRACKER</p>
+</div>
+
+<div class="badge st-wait" id="badge">
+  <div class="dot"></div><span id="badgeText">TAP TOMBOL KUNING</span>
+</div>
+
+<div class="steps">
+  <div class="step active" id="s1">1. IZIN GPS</div>
+  <div class="step" id="s2">2. SERVER</div>
+  <div class="step" id="s3">3. KIRIM</div>
+</div>
+
+<div id="offlineBadge">📵 OFFLINE — GPS tersimpan, akan kirim saat online</div>
+
+<label>NAMA DRIVER</label>
+<input type="text" id="driverName" value="Demo Driver" placeholder="Nama driver...">
+
+<div class="spd-box">
+  <div class="spd-num" id="spdNum">0</div>
+  <div class="spd-unit">km/h</div>
+  <div class="spd-bar-w"><div class="spd-bar" id="spdBar" style="width:0%"></div></div>
+</div>
+
+<div class="card">
+  <div class="ctitle">📡 GPS REALTIME</div>
+  <div class="row"><span class="rl">Latitude</span> <span class="rv" id="vLat">—</span></div>
+  <div class="row"><span class="rl">Longitude</span><span class="rv" id="vLng">—</span></div>
+  <div class="row"><span class="rl">Akurasi</span>  <span class="rv" id="vAcc">—</span></div>
+  <div class="row"><span class="rl">Heading</span>  <span class="rv" id="vHead">—</span></div>
+  <div class="row"><span class="rl">Altitude</span> <span class="rv" id="vAlt">—</span></div>
+  <div class="row"><span class="rl">Waktu</span>    <span class="rv dim" id="vTime">—</span></div>
+</div>
+
+<div class="cnt">Terkirim: <b id="cnt">0</b> titik | Pending: <b id="pending">0</b></div>
+
+<button class="btn btn-perm" id="btnPerm" onclick="mintaIzin()">
+  📍 STEP 1 — IZINKAN AKSES GPS
+</button>
+<button class="btn btn-go" id="btnGo" onclick="startGPS()">
+  ▶ STEP 2 — MULAI KIRIM GPS
+</button>
+<button class="btn btn-stop" id="btnStop" onclick="stopGPS()">
+  ■ STOP TRACKING
+</button>
+
+<div class="log" id="log"><div class="warn">> Tap STEP 1 untuk mulai</div></div>
+
 <script>
-var SERVER = 'https://momentify-fleet-production.up.railway.app';
+var SERVER = 'https://atop-crimp-jargon.ngrok-free.dev';
+var sk = null, wid = null, count = 0;
+var driverId = 'D' + Math.floor(Math.random()*900+100);
+var pendingQueue = []; // GPS buffer saat offline
+var deferredPrompt = null;
 
-var sk=null, wid=null, n=0;
-var did='D'+Math.floor(Math.random()*900+100);
+// ── PWA Install ───────────────────────────────────────────
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').classList.add('show');
+});
 
-function lg(c,t){
-  var b=document.getElementById('log');
-  var e=document.createElement('div');
-  e.style.color=c; e.textContent='>'+t;
-  b.appendChild(e); b.scrollTop=b.scrollHeight;
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(r) {
+    if (r.outcome === 'accepted') {
+      lg('ok','✅ App berhasil diinstall!');
+      document.getElementById('installBanner').classList.remove('show');
+    }
+    deferredPrompt = null;
+  });
 }
 
-function izin(){
-  lg('#ff0','Minta izin GPS...');
-  document.getElementById('b1').textContent='MENUNGGU IZIN...';
-  document.getElementById('b1').style.background='#888';
+window.addEventListener('appinstalled', function() {
+  lg('ok','✅ Momentify Fleet terinstall di homescreen');
+  document.getElementById('installBanner').classList.remove('show');
+});
 
-  if(!navigator.geolocation){
-    lg('#f00','GPS tidak ada! Pakai Chrome/Opera terbaru');
-    document.getElementById('b1').textContent='GPS TIDAK ADA';
+// ── Service Worker ────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(function(r) { lg('ok','SW registered'); })
+    .catch(function(e) { lg('warn','SW: '+e.message); });
+}
+
+// ── Online/Offline detection ──────────────────────────────
+window.addEventListener('online', function() {
+  document.getElementById('offlineBadge').classList.remove('show');
+  setBadge('st-ok','🟢 ONLINE — Mengirim data tertunda...');
+  flushQueue();
+});
+window.addEventListener('offline', function() {
+  document.getElementById('offlineBadge').classList.add('show');
+  setBadge('st-bad','📵 OFFLINE — GPS tersimpan lokal');
+});
+
+// ── STEP 1: Minta Izin GPS ────────────────────────────────
+function mintaIzin() {
+  setBadge('st-wait','⏳ MENUNGGU IZIN GPS...');
+  lg('warn','Minta izin GPS...');
+  document.getElementById('btnPerm').textContent = '⏳ MENUNGGU IZIN...';
+  document.getElementById('btnPerm').style.background = '#888';
+
+  if (!navigator.geolocation) {
+    lg('err','GPS tidak tersedia! Pakai Chrome.');
+    setBadge('st-bad','❌ GPS TIDAK ADA');
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
-    function(p){
-      lg('#0f0','IZIN OK! Lat:'+p.coords.latitude.toFixed(5));
-      lg('#0f0','Akurasi:+-'+p.coords.accuracy.toFixed(0)+'m');
-      document.getElementById('st').textContent='GPS SIAP';
-      document.getElementById('b1').style.display='none';
+    function(pos) {
+      lg('ok','✅ Izin OK! Lat:'+pos.coords.latitude.toFixed(5));
+      lg('ok','Akurasi: ±'+pos.coords.accuracy.toFixed(0)+'m');
+      stepDone('s1');
+      setBadge('st-wait','🔌 KONEK KE SERVER...');
+      document.getElementById('btnPerm').style.display = 'none';
       konek();
     },
-    function(e){
-      var msg = e.code===1 ? 'DITOLAK! Settings HP > Chrome > Izin > Lokasi > ON'
-              : e.code===2 ? 'GPS lemah, coba di luar ruangan'
-              : 'Timeout, tap lagi';
-      lg('#f00', msg);
-      document.getElementById('b1').textContent='TAP LAGI — IZIN GPS';
-      document.getElementById('b1').style.background='#ff0';
-      document.getElementById('st').textContent='GAGAL';
+    function(err) {
+      var m = {
+        1:'DITOLAK! Settings HP → Chrome → Izin → Lokasi → ON',
+        2:'GPS lemah. Keluar ruangan / matikan hemat baterai',
+        3:'GPS timeout. Tap lagi.'
+      };
+      lg('err', m[err.code] || err.message);
+      setBadge('st-bad','❌ '+( err.code===1?'IZIN DITOLAK':'GPS ERROR'));
+      document.getElementById('btnPerm').textContent = '📍 TAP LAGI — IZIN GPS';
+      document.getElementById('btnPerm').style.background = 'linear-gradient(135deg,#ffcc00,#ff6b35)';
     },
     {enableHighAccuracy:true, timeout:15000, maximumAge:0}
   );
 }
 
-function konek(){
-  lg('#ff0','Konek server '+SERVER);
-  // Konek langsung ke IP server dengan port
+// ── Konek Socket ──────────────────────────────────────────
+function konek() {
   sk = io(SERVER, {
-    transports:['websocket','polling'],
-    reconnection:true,
-    reconnectionDelay:2000,
-    reconnectionAttempts:10,
-    pingTimeout:60000,
-    pingInterval:10000
+    transports: ['websocket','polling'],
+    reconnection: true,
+    reconnectionDelay: 2000,
+    reconnectionAttempts: 20,
+    pingTimeout:  60000,
+    pingInterval: 10000
   });
-  sk.on('connect',function(){
-    lg('#0f0','SERVER OK: '+sk.id.slice(0,6));
-    document.getElementById('sv').textContent='KONEK ✓';
-    document.getElementById('sv').style.color='#0f0';
-    document.getElementById('b2').style.display='block';
+
+  sk.on('connect', function() {
+    stepDone('s2');
+    setBadge('st-ok','🟢 SERVER OK — TAP MULAI');
+    lg('ok','Terhubung: '+sk.id.slice(0,8));
+    document.getElementById('btnGo').style.display = 'block';
+    flushQueue(); // kirim data yang pending
   });
-  sk.on('disconnect',function(r){
-    lg('#f00','Putus:'+r);
-    document.getElementById('sv').textContent='PUTUS';
-    document.getElementById('sv').style.color='#f00';
+
+  sk.on('disconnect', function(r) {
+    setBadge('st-bad','🔴 PUTUS: '+r);
+    lg('err','Disconnect: '+r);
   });
-  sk.on('connect_error',function(e){
-    lg('#f00','Gagal konek server: '+e.message);
-    lg('#ff0','Pastikan HP & laptop 1 WiFi!');
+
+  sk.on('reconnect', function(n) {
+    setBadge('st-ok','🟢 RECONNECT #'+n);
+    lg('ok','Reconnect OK #'+n);
+    flushQueue();
+  });
+
+  sk.on('connect_error', function(e) {
+    setBadge('st-bad','🔴 GAGAL KONEK');
+    lg('err','Error: '+e.message);
   });
 }
 
-function mulai(){
-  if(!sk||!sk.connected){lg('#f00','Server belum konek!');return;}
-  document.getElementById('b2').style.display='none';
-  document.getElementById('b3').style.display='block';
-  document.getElementById('st').textContent='KIRIM GPS';
-  lg('#0ff','watchPosition aktif...');
+// ── STEP 2: Mulai GPS ────────────────────────────────────
+function startGPS() {
+  if (!sk || !sk.connected) { lg('err','Server belum konek!'); return; }
+  document.getElementById('btnGo').style.display   = 'none';
+  document.getElementById('btnStop').style.display = 'block';
+  stepDone('s3');
+  setBadge('st-send','📡 MENGIRIM GPS REALTIME...');
+  lg('ok','watchPosition aktif...');
 
-  wid=navigator.geolocation.watchPosition(
-    function(p){
-      var c=p.coords;
-      var s=c.speed!=null?(c.speed*3.6).toFixed(1):'0';
-      var t=new Date().toLocaleTimeString('id-ID');
-      document.getElementById('sp').textContent=Math.round(parseFloat(s));
-      document.getElementById('la').textContent=c.latitude.toFixed(6);
-      document.getElementById('ln').textContent=c.longitude.toFixed(6);
-      document.getElementById('ac').textContent='+-'+c.accuracy.toFixed(0)+'m';
-      document.getElementById('wk').textContent=t;
-      sk.emit('driver-location',{
-        driverId:did,
-        driverName:document.getElementById('nm').value||'Driver',
-        lat:c.latitude, lng:c.longitude, speed:s,
-        accuracy:c.accuracy.toFixed(0),
-        heading:c.heading||0, altitude:c.altitude||0
-      });
-      n++; document.getElementById('ct').textContent=n;
-      if(n<=3||n%5===0)
-        lg('#0f0','['+t+'] '+c.latitude.toFixed(4)+','+c.longitude.toFixed(4)+' '+s+'kmh');
-    },
-    function(e){lg('#f00','GPS err:'+e.code);},
-    {enableHighAccuracy:true,timeout:20000,maximumAge:0}
-  );
-  setInterval(function(){if(sk&&sk.connected)sk.emit('ping-driver',{id:did});},15000);
+  wid = navigator.geolocation.watchPosition(onGPS, onGPSErr, {
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 0
+  });
+
+  // Keepalive
+  window._ka = setInterval(function() {
+    if (sk && sk.connected) sk.emit('ping-driver', {id: driverId});
+  }, 15000);
+
+  // Wake lock — cegah HP sleep
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen')
+      .then(function(wl) {
+        lg('ok','Wake lock aktif — layar tidak sleep');
+        window._wakeLock = wl;
+      })
+      .catch(function() { lg('warn','Wake lock tidak tersedia'); });
+  }
 }
 
-function stop(){
-  if(wid){navigator.geolocation.clearWatch(wid);wid=null;}
-  document.getElementById('b2').style.display='block';
-  document.getElementById('b3').style.display='none';
-  document.getElementById('st').textContent='STOP';
-  lg('#ff0','Berhenti.');
+function stopGPS() {
+  if (wid) { navigator.geolocation.clearWatch(wid); wid = null; }
+  if (window._ka) clearInterval(window._ka);
+  if (window._wakeLock) { window._wakeLock.release(); window._wakeLock = null; }
+  document.getElementById('btnGo').style.display   = 'block';
+  document.getElementById('btnStop').style.display = 'none';
+  setBadge('st-ok','🟢 TRACKING BERHENTI');
+  lg('warn','Tracking dihentikan');
+}
+
+// ── GPS Data ──────────────────────────────────────────────
+function onGPS(pos) {
+  var c   = pos.coords;
+  var spd = c.speed != null ? (c.speed * 3.6).toFixed(1) : '0';
+  var now = new Date().toLocaleTimeString('id-ID');
+
+  // Update UI
+  document.getElementById('vLat').textContent  = c.latitude.toFixed(7);
+  document.getElementById('vLng').textContent  = c.longitude.toFixed(7);
+  document.getElementById('vAcc').textContent  = '±'+c.accuracy.toFixed(0)+'m';
+  document.getElementById('vHead').textContent = c.heading!=null ? c.heading.toFixed(0)+'°' : '—';
+  document.getElementById('vAlt').textContent  = c.altitude!=null ? c.altitude.toFixed(0)+'m' : '—';
+  document.getElementById('vTime').textContent = now;
+
+  // Speed display
+  var s = parseFloat(spd);
+  var el = document.getElementById('spdNum');
+  el.textContent = Math.round(s);
+  el.className   = 'spd-num'+(s>80?' danger':s>50?' warn':'');
+  var bar = document.getElementById('spdBar');
+  bar.style.width = Math.min(s/100*100,100)+'%';
+  bar.style.background = s>80
+    ? 'linear-gradient(90deg,#ff3d6b,#ff6b35)'
+    : s>50 ? 'linear-gradient(90deg,#ffcc00,#ff6b35)'
+    : 'linear-gradient(90deg,#00d4ff,#00e676)';
+
+  // Data payload
+  var payload = {
+    driverId:   driverId,
+    driverName: document.getElementById('driverName').value || 'Driver',
+    lat:        c.latitude,
+    lng:        c.longitude,
+    speed:      spd,
+    accuracy:   c.accuracy.toFixed(0),
+    heading:    c.heading  || 0,
+    altitude:   c.altitude || 0
+  };
+
+  // Kirim atau simpan ke queue
+  if (sk && sk.connected) {
+    sk.emit('driver-location', payload);
+    count++;
+    document.getElementById('cnt').textContent = count;
+    if (count <= 3 || count % 5 === 0)
+      lg('ok','['+now+'] '+c.latitude.toFixed(4)+','+c.longitude.toFixed(4)+' '+spd+'km/h');
+  } else {
+    // Simpan ke pending queue (offline mode)
+    pendingQueue.push(payload);
+    if (pendingQueue.length > 100) pendingQueue.shift(); // max 100 titik
+    document.getElementById('pending').textContent = pendingQueue.length;
+    lg('warn','[OFFLINE] Tersimpan lokal: '+pendingQueue.length+' titik');
+  }
+}
+
+// Kirim pending queue saat online kembali
+function flushQueue() {
+  if (!pendingQueue.length || !sk || !sk.connected) return;
+  lg('ok','Mengirim '+pendingQueue.length+' titik pending...');
+  pendingQueue.forEach(function(p) { sk.emit('driver-location', p); count++; });
+  pendingQueue = [];
+  document.getElementById('cnt').textContent    = count;
+  document.getElementById('pending').textContent = 0;
+}
+
+function onGPSErr(e) {
+  var m = {1:'Izin dicabut!',2:'Sinyal GPS hilang',3:'GPS timeout'};
+  lg('err', m[e.code] || e.message);
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function setBadge(cls, text) {
+  document.getElementById('badge').className = 'badge '+cls;
+  document.getElementById('badgeText').textContent = text;
+}
+function stepDone(id) {
+  var el = document.getElementById(id);
+  el.className = 'step done';
+}
+function lg(type, msg) {
+  var b = document.getElementById('log');
+  var d = document.createElement('div');
+  d.className = type;
+  d.textContent = '> '+msg;
+  b.appendChild(d);
+  b.scrollTop = b.scrollHeight;
 }
 </script>
 </body>

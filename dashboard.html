@@ -123,6 +123,23 @@ header{height:52px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--b
 .t-title{font-size:11px;font-weight:700}
 .t-sub{font-size:10px;color:var(--mt)}
 .t-close{background:none;border:none;color:var(--dm);cursor:pointer;font-size:13px;margin-left:auto}
+
+/* Trip styles */
+.trip-card{background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:10px;margin-bottom:7px}
+.tc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.tc-code{font-size:14px;font-weight:900;color:#ffcc00;letter-spacing:2px}
+.tc-route{font-size:11px;color:var(--tx);font-weight:700}
+.tc-info{font-size:10px;color:var(--mt);margin-bottom:6px;line-height:1.6}
+.tc-actions{display:flex;gap:5px;flex-wrap:wrap}
+.tc-btn{font-size:9px;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-family:monospace;font-weight:700}
+.tc-btn.share{background:rgba(0,212,255,0.15);color:var(--ac);border:1px solid rgba(0,212,255,0.3)}
+.tc-btn.arrive{background:rgba(0,230,118,0.15);color:var(--gr);border:1px solid rgba(0,230,118,0.3)}
+.tc-btn.pool{background:rgba(255,204,0,0.15);color:var(--wn);border:1px solid rgba(255,204,0,0.3)}
+.tc-btn.del{background:rgba(255,61,107,0.1);color:var(--rd);border:1px solid rgba(255,61,107,0.3)}
+.pill-arrived{background:rgba(0,230,118,0.1);color:var(--gr);border:1px solid rgba(0,230,118,0.2);padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700}
+.pill-active{background:rgba(255,204,0,0.1);color:var(--wn);border:1px solid rgba(255,204,0,0.2);padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700}
+.new-trip input{width:100%;background:#111b2e;border:1px solid var(--b);border-radius:6px;padding:7px 10px;color:var(--tx);font-size:11px;font-family:monospace;margin-bottom:6px;outline:none}
+.new-trip input:focus{border-color:var(--ac)}
 </style>
 </head>
 <body>
@@ -159,6 +176,8 @@ header{height:52px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--b
       <div class="tab" onclick="tab('alerts',this)">⚡ ALERT</div>
       <div class="tab" onclick="tab('geo',this)">🔵 GEO</div>
       <div class="tab" onclick="tab('export',this)">📊 EXPORT</div>
+      <div class="tab" onclick="tab('dispatch',this)">🚀 DISPATCH</div>
+      <div class="tab" onclick="tab('trips',this)">🎫 TRIPS</div>
     </div>
 
     <div class="tc on" id="tc-drivers">
@@ -203,6 +222,61 @@ header{height:52px;background:rgba(8,12,20,0.97);border-bottom:1px solid var(--b
       </div>
     </div>
 
+    <div class="tc" id="tc-dispatch">
+      <div style="padding:4px">
+        <div style="font-size:11px;color:#00d4ff;font-weight:700;margin-bottom:10px;letter-spacing:1px">🚀 CARI & DISPATCH DRIVER</div>
+
+        <div style="font-size:10px;color:var(--mt);margin-bottom:8px">Klik peta untuk set titik pickup, atau isi manual:</div>
+
+        <div style="margin-bottom:6px">
+          <div style="font-size:9px;color:var(--dm);margin-bottom:3px">NAMA PICKUP</div>
+          <input id="pk-name" placeholder="Nama lokasi pickup..." style="width:100%;background:#111b2e;border:1px solid var(--b);border-radius:6px;padding:7px 10px;color:var(--tx);font-size:11px;font-family:monospace;outline:none">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div>
+            <div style="font-size:9px;color:var(--dm);margin-bottom:3px">LATITUDE</div>
+            <input id="pk-lat" placeholder="-6.9175" style="width:100%;background:#111b2e;border:1px solid var(--b);border-radius:6px;padding:7px 8px;color:var(--tx);font-size:11px;font-family:monospace;outline:none">
+          </div>
+          <div>
+            <div style="font-size:9px;color:var(--dm);margin-bottom:3px">LONGITUDE</div>
+            <input id="pk-lng" placeholder="107.6191" style="width:100%;background:#111b2e;border:1px solid var(--b);border-radius:6px;padding:7px 8px;color:var(--tx);font-size:11px;font-family:monospace;outline:none">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+          <button onclick="cariDriver()" style="padding:9px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);color:var(--ac);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:monospace">🔍 CARI</button>
+          <button onclick="dispatch()" style="padding:9px;background:linear-gradient(135deg,#00d4ff,#0055ff);border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:monospace">🚀 DISPATCH</button>
+        </div>
+
+        <div id="nearestResult" style="font-size:10px;color:var(--dm);text-align:center;padding:10px">
+          Cari driver terdekat dari titik pickup
+        </div>
+      </div>
+    </div>
+
+    <div class="tc" id="tc-trips">
+      <div style="padding:4px">
+        <div style="font-size:11px;color:#ffcc00;font-weight:700;margin-bottom:10px;letter-spacing:1px">🎫 KELOLA TRIP TRACKING</div>
+
+        <!-- Form buat trip baru -->
+        <div class="new-trip" style="background:rgba(255,204,0,0.05);border:1px solid rgba(255,204,0,0.15);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="font-size:10px;color:var(--wn);font-weight:700;margin-bottom:8px;letter-spacing:1px">+ BUAT TRIP BARU</div>
+          <input id="tr-route"  placeholder="Nama rute (cth: Bandung → Jakarta)">
+          <input id="tr-driver" placeholder="ID / Nama Driver">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <input id="tr-origin" placeholder="Terminal asal">
+            <input id="tr-dest"   placeholder="Terminal tujuan">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+            <input id="tr-dlat" placeholder="Lat tujuan">
+            <input id="tr-dlng" placeholder="Lng tujuan">
+          </div>
+          <button onclick="createTrip()" style="width:100%;margin-top:6px;padding:9px;background:linear-gradient(135deg,#ffcc00,#ff6b35);border:none;border-radius:6px;color:#000;font-size:12px;font-weight:800;cursor:pointer;font-family:monospace">🎫 BUAT TRIP & GENERATE LINK</button>
+        </div>
+
+        <div id="tripList"><div class="no-data">Belum ada trip aktif</div></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -215,7 +289,7 @@ var UNAME = localStorage.getItem('mf_name') || '';
 if (!TOKEN) { window.location.href = '/'; }
 document.getElementById('userName').textContent = UNAME;
 
-var SERVER = 'https://momentify-fleet-production.up.railway.app';
+var SERVER = 'https://atop-crimp-jargon.ngrok-free.dev';
 
 function authHeader() { return { 'x-auth-token': TOKEN }; }
 

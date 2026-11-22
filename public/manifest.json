@@ -1,0 +1,24 @@
+{
+  "name": "Momentify Fleet Driver",
+  "short_name": "MF Driver",
+  "description": "Momentify Fleet GPS Tracker untuk Driver",
+  "start_url": "/hp",
+  "display": "standalone",
+  "background_color": "#080c14",
+  "theme_color": "#00d4ff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23080c14' rx='24'/><text x='96' y='130' text-anchor='middle' font-size='100'>🗺</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23080c14' rx='60'/><text x='256' y='340' text-anchor='middle' font-size='280'>🗺</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["navigation", "utilities"],
+  "lang": "id"
+}
