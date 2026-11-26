@@ -56,6 +56,21 @@ const publicViewers = {}; // trackingCode → [socketId]
 function generateToken(len=32) {
   return crypto.randomBytes(len).toString('hex');
 }
+// ── Pencocokan driver <-> trip (abaikan huruf besar/kecil & spasi) ──
+const norm = x => String(x == null ? '' : x).trim().toLowerCase();
+function sameDriver(trip, d) {
+  const t = norm(trip.driverId);
+  return t !== '' && (t === norm(d.id) || t === norm(d.name));
+}
+function posOf(s) { return { lat:s.lat, lng:s.lng, speed:s.speed, accuracy:s.accuracy, heading:s.heading, timestamp:s.timestamp }; }
+// Posisi live; bila driver terputus pakai posisi terakhir yang tersimpan di trip
+function tripPosition(trip) {
+  const live = Object.values(drivers).find(d => sameDriver(trip, d));
+  if (live) return { pos: posOf(live), state: 'live' };
+  if (trip.last) return { pos: trip.last, state: 'stale' };
+  return { pos: null, state: 'none' };
+}
+
 function requireAuth(req, res, next) {
   const token = req.headers['x-auth-token'] || req.query.token;
   if (token && sessions[token]) { req.user = sessions[token]; return next(); }
@@ -181,7 +196,11 @@ app.post('/api/trips', requireAuth, (req,res) => {
   };
   trips[code] = trip;
   console.log(`🎫 TRIP CREATED: ${code} → ${routeName}`);
-  res.json(trip);
+  const lv = Object.values(drivers).find(d => sameDriver(trip, d));
+  if (lv) trip.last = posOf(lv);
+  const names = [...new Set(Object.values(drivers).map(d => d.name))];
+  res.json({ ...trip, driverFound: !!lv,
+    warning: lv ? null : `Driver "${driverId}" belum terhubung / tidak cocok. Driver terhubung saat ini: ${names.length ? names.join(', ') : '(tidak ada)'}` });
 });
 
 // List semua trips
@@ -218,17 +237,12 @@ app.get('/api/public/trip/:code', (req,res) => {
   const trip = trips[code];
   if (!trip) return res.status(404).json({error:'Trip tidak ditemukan atau sudah expired'});
 
-  // Cari driver yang match
-  const driver = Object.values(drivers).find(d => d.id===trip.driverId || d.name===trip.driverId);
-
+  const { pos, state } = tripPosition(trip);
   res.json({
     trip,
-    driver: driver ? {
-      lat: driver.lat, lng: driver.lng,
-      speed: driver.speed, accuracy: driver.accuracy,
-      heading: driver.heading, timestamp: driver.timestamp
-    } : null,
-    eta: driver && trip.destLat ? Math.ceil(getDistance(driver.lat,driver.lng,trip.destLat,trip.destLng)/1000/60*60) : null
+    driver: pos,
+    driverState: state,
+    eta: pos && trip.destLat ? Math.ceil(getDistance(pos.lat,pos.lng,trip.destLat,trip.destLng)/1000/60*60) : null
   });
 });
 
@@ -295,7 +309,7 @@ io.on('connection', (socket) => {
     // Auto-arrive check untuk semua trip aktif driver ini
     Object.values(trips).forEach(trip => {
       if (trip.status!=='active') return;
-      if (trip.driverId!==d.id && trip.driverId!==d.name) return;
+      if (!sameDriver(trip, d)) return;
       if (!trip.destLat || !trip.destLng) return;
       const distToDest = getDistance(d.lat, d.lng, trip.destLat, trip.destLng);
       if (distToDest < 200) { // 200 meter dari tujuan = ARRIVED
@@ -315,9 +329,10 @@ io.on('connection', (socket) => {
     io.emit('gps-update', d);
 
     // Broadcast ke public viewers trip ini
-    Object.values(trips).filter(t=>t.status==='active'&&(t.driverId===d.id||t.driverId===d.name)).forEach(trip => {
+    Object.values(trips).filter(t=>t.status==='active'&&sameDriver(t,d)).forEach(trip => {
+      trip.last = posOf(d);
       io.to(`trip_${trip.code}`).emit('public-gps', {
-        lat:d.lat, lng:d.lng, speed:d.speed, heading:d.heading,
+        state:'live', lat:d.lat, lng:d.lng, speed:d.speed, heading:d.heading,
         accuracy:d.accuracy, timestamp:d.timestamp,
         tripCode:trip.code, routeName:trip.routeName,
         destination:trip.destination, destLat:trip.destLat, destLng:trip.destLng,
@@ -338,9 +353,11 @@ io.on('connection', (socket) => {
     trip.viewers = publicViewers[trip.code].size;
     io.emit('trip-viewers-update', {code:trip.code, viewers:trip.viewers});
     console.log(`👁 PUBLIC VIEWER: trip ${trip.code} — total ${trip.viewers} viewers`);
-    // Kirim posisi driver saat ini langsung
-    const driver = Object.values(drivers).find(d=>d.id===trip.driverId||d.name===trip.driverId);
-    if (driver) socket.emit('public-gps', {lat:driver.lat,lng:driver.lng,speed:driver.speed,heading:driver.heading,accuracy:driver.accuracy,timestamp:driver.timestamp,tripCode:trip.code,routeName:trip.routeName,destination:trip.destination,destLat:trip.destLat,destLng:trip.destLng});
+    // Kirim posisi saat ini (live) atau posisi terakhir yang tersimpan
+    const { pos, state } = tripPosition(trip);
+    if (pos) socket.emit('public-gps', { state, lat:pos.lat, lng:pos.lng, speed:pos.speed, heading:pos.heading, accuracy:pos.accuracy, timestamp:pos.timestamp,
+      tripCode:trip.code, routeName:trip.routeName, destination:trip.destination, destLat:trip.destLat, destLng:trip.destLng,
+      eta: trip.destLat ? Math.ceil(getDistance(pos.lat,pos.lng,trip.destLat,trip.destLng)/1000/60*60) : null });
   });
 
   socket.on('ping-driver', () => {});
@@ -349,6 +366,7 @@ io.on('connection', (socket) => {
     if (drivers[socket.id]) {
       const d = drivers[socket.id];
       io.emit('driver-offline', {socketId:socket.id, name:d.name, id:d.id});
+      Object.values(trips).filter(t => t.status==='active' && sameDriver(t, d)).forEach(t => io.to(`trip_${t.code}`).emit('public-state', {tripCode:t.code, state:'stale'}));
       console.log(`❌ OFFLINE → ${d.name}`);
       delete drivers[socket.id];
     }
